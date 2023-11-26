@@ -13,7 +13,7 @@ app.use(express.json())
 // FhJUtU1b3VMH4JOW
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 // const uri = "mongodb+srv://<username>:<password>@cluster0.0db2mvq.mongodb.net/?retryWrites=true&w=majority";
 const uri = `mongodb+srv://${process.env.USER_ID}:${process.env.USER_PASS}@cluster0.0db2mvq.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -33,13 +33,22 @@ async function run() {
         // Send a ping to confirm a successful connection
 
         // All collection goes here ========================================
-        const userCollection = client.db('restaurantDB').collection('users')
+        const userCollection = client.db('myStockDb').collection('users')
+        const shopCollection = client.db('myStockDb').collection('shops')
+        const productCollection = client.db('myStockDb').collection('products')
 
         // jwt web token api ==================================
         app.post('/jwt', async (req, res) => {
             const user = req.body
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
             res.send({ token })
+        })
+
+        // user collection api =================================
+        app.get('/users/:email', async (req, res) => {
+            const query = { email: req.params.email }
+            const result = await userCollection.findOne(query)
+            res.send(result)
         })
 
         app.post('/users', async (req, res) => {
@@ -50,6 +59,92 @@ async function run() {
                 return res.send({ message: 'The user is already registered.', insertedId: null })
             }
             const result = await userCollection.insertOne(user)
+            res.send(result)
+        })
+
+        app.get('/shops/:email', async (req, res) => {
+            const query = { ownerEmail: req.params.email }
+            const result = await shopCollection.findOne(query)
+            res.send(result)
+        })
+
+        app.post('/shops', async (req, res) => {
+            const shop = req.body;
+            const result = await shopCollection.insertOne(shop);
+
+            // Update the user with shop information
+            const { insertedId } = result;
+            const userEmail = shop.ownerEmail;
+            await userCollection.updateOne(
+                { email: userEmail },
+                {
+                    $set: {
+                        role: 'manager',
+                        shopId: insertedId,
+                        shopName: shop.shopName,
+                        shopLogo: shop.shopLogo
+                    }
+                }
+            );
+
+            res.send(result);
+        });
+
+        // products collection api ====================================
+        app.get('/products/owner/:id', async (req, res) => {
+            const shopId = req.params.id
+            const query = { shopId: shopId }
+            const result = await productCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        app.get('/products/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await productCollection.findOne(query)
+            res.send(result)
+        })
+
+
+        app.post('/products', async (req, res) => {
+            const product = req.body
+            const shopId = product.shopId
+            const query = { shopId: shopId }
+
+            const existingProducts = await productCollection.find(query).toArray();
+            if (existingProducts.length >= 3) {
+                return res.send({ message: 'product limit crossed' })
+            }
+
+            const result = await productCollection.insertOne(product)
+            res.send(result)
+        })
+
+        app.patch('/products/:id', async (req, res) => {
+            const item = req.body
+            const id = req.params.id
+            const filter = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    name: item.name,
+                    quantity: item.quantity,
+                    buyingPrice: item.buyingPrice,
+                    profitMargin: item.profitMargin,
+                    discount: item.discount,
+                    location: item.location,
+                    description: item.description,
+                    image: item.image
+                }
+            }
+
+            const result = await productCollection.updateOne(filter, updatedDoc)
+            res.send(result)
+        })
+
+        app.delete('/products/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await productCollection.deleteOne(query)
             res.send(result)
         })
 
