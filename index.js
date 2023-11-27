@@ -14,9 +14,6 @@ app.use(express.json())
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
-// const uri = "mongodb://localhost:27017";
-// const uri = "mongodb+srv://<username>:<password>@cluster0.0db2mvq.mongodb.net/?retryWrites=true&w=majority";
 const uri = `mongodb+srv://${process.env.USER_ID}:${process.env.USER_PASS}@cluster0.0db2mvq.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -179,7 +176,19 @@ async function run() {
             const sales = req.body
             const salesResult = await saleCollection.insertOne(sales)
 
-            // Increase the sales count of that product from product collection
+            // Increase the sales count and decrease the quantity of that product
+            const filter = {
+                _id: {
+                    $in: sales.cartProductIds.map(id => new ObjectId(id))
+                }
+            };
+            const updateDoc = {
+                $inc: {
+                    saleCount: 1,
+                    quantity: -1
+                }
+            };
+            const productResult = await productCollection.updateMany(filter, updateDoc)
 
             // clear the carts data after get paid
             const query = {
@@ -188,11 +197,27 @@ async function run() {
                 }
             }
             const deleteResult = await cartCollection.deleteMany(query)
-            res.send({ salesResult, deleteResult })
+
+            const safeSalesResult = JSON.stringify(salesResult, getCircularReplacer());
+            const safeProductResult = JSON.stringify(productResult, getCircularReplacer());
+            res.send({ salesResult: safeSalesResult, deleteResult, productResult: safeProductResult });
+
         })
 
 
-
+        // Helper function to handle circular structures
+        function getCircularReplacer() {
+            const seen = new WeakSet();
+            return (key, value) => {
+                if (typeof value === "object" && value !== null) {
+                    if (seen.has(value)) {
+                        return "[Circular Reference]";
+                    }
+                    seen.add(value);
+                }
+                return value;
+            };
+        }
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
