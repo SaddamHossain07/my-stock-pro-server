@@ -14,6 +14,8 @@ app.use(express.json())
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+
+// const uri = "mongodb://localhost:27017";
 // const uri = "mongodb+srv://<username>:<password>@cluster0.0db2mvq.mongodb.net/?retryWrites=true&w=majority";
 const uri = `mongodb+srv://${process.env.USER_ID}:${process.env.USER_PASS}@cluster0.0db2mvq.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -36,6 +38,8 @@ async function run() {
         const userCollection = client.db('myStockDb').collection('users')
         const shopCollection = client.db('myStockDb').collection('shops')
         const productCollection = client.db('myStockDb').collection('products')
+        const cartCollection = client.db('myStockDb').collection('carts')
+        const saleCollection = client.db('myStockDb').collection('sales')
 
         // jwt web token api ==================================
         app.post('/jwt', async (req, res) => {
@@ -62,6 +66,7 @@ async function run() {
             res.send(result)
         })
 
+        // shop collection ================================
         app.get('/shops/:email', async (req, res) => {
             const query = { ownerEmail: req.params.email }
             const result = await shopCollection.findOne(query)
@@ -91,13 +96,6 @@ async function run() {
         });
 
         // products collection api ====================================
-        app.get('/products/owner/:id', async (req, res) => {
-            const shopId = req.params.id
-            const query = { shopId: shopId }
-            const result = await productCollection.find(query).toArray()
-            res.send(result)
-        })
-
         app.get('/products/:email', async (req, res) => {
             const email = req.params.email
             const query = { ownerEmail: email }
@@ -154,6 +152,46 @@ async function run() {
             const result = await productCollection.deleteOne(query)
             res.send(result)
         })
+
+
+        // carts and checkout functionalities ====================
+        app.get('/carts/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { ownerEmail: email }
+            const result = await cartCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        app.post('/carts', async (req, res) => {
+            const item = req.body
+            const result = await cartCollection.insertOne(item)
+            res.send(result)
+        })
+
+        app.delete('/carts/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: id }
+            const result = await cartCollection.deleteOne(query)
+            res.send(result)
+        })
+        // sales collection =====================================
+        app.post('/sales', async (req, res) => {
+            const sales = req.body
+            const salesResult = await saleCollection.insertOne(sales)
+
+            // Increase the sales count of that product from product collection
+
+            // clear the carts data after get paid
+            const query = {
+                _id: {
+                    $in: sales.cartIds.map(id => new ObjectId(id))
+                }
+            }
+            const deleteResult = await cartCollection.deleteMany(query)
+            res.send({ salesResult, deleteResult })
+        })
+
+
 
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
