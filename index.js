@@ -95,7 +95,7 @@ async function run() {
         // products collection api ====================================
         app.get('/products/:email', async (req, res) => {
             const email = req.params.email
-            const query = { ownerEmail: email }
+            const query = { shopManager: email }
             const result = await productCollection.find(query).toArray()
             res.send(result)
         })
@@ -154,7 +154,7 @@ async function run() {
         // carts and checkout functionalities ====================
         app.get('/carts/:email', async (req, res) => {
             const email = req.params.email
-            const query = { ownerEmail: email }
+            const query = { shopManager: email }
             const result = await cartCollection.find(query).toArray()
             res.send(result)
         })
@@ -171,7 +171,54 @@ async function run() {
             const result = await cartCollection.deleteOne(query)
             res.send(result)
         })
-        // sales collection =====================================
+
+        // sales collection ==================================
+        app.get('/sales/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { shopManager: email }
+            const result = await saleCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        app.get('/sales', async (req, res) => {
+            const result = await saleCollection.aggregate([
+                {
+                    $sort: { salesDate: -1 }
+                },
+                {
+                    $unwind: '$cartProductIds'
+                },
+                {
+                    $lookup: {
+                        from: 'products',
+                        localField: 'shopManager',
+                        foreignField: 'shopManager',
+                        as: 'cartProducts'
+                    }
+                },
+                {
+                    $unwind: '$cartProducts'
+                },
+                {
+                    $group: {
+                        _id: '$cartProducts.shopManager',
+                        buyingPrice: { $sum: '$cartProducts.buyingPrice' },
+                        sellingPrice: { $sum: '$cartProducts.sellingPrice' },
+
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        buyingPrice: '$buyingPrice',
+                        sellingPrice: '$sellingPrice',
+                    }
+                }
+
+            ]).toArray()
+            res.send(result)
+        })
+
         app.post('/sales', async (req, res) => {
             const sales = req.body
             const salesResult = await saleCollection.insertOne(sales)
