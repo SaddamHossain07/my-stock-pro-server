@@ -3,6 +3,7 @@ require('dotenv').config()
 const cors = require('cors');
 const jwt = require('jsonwebtoken')
 const app = express()
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const port = process.env.PORT || 5000
 
 
@@ -48,6 +49,7 @@ async function run() {
         const productCollection = client.db('myStockDb').collection('products')
         const cartCollection = client.db('myStockDb').collection('carts')
         const saleCollection = client.db('myStockDb').collection('sales')
+        const paymentCollection = client.db('myStockDb').collection('payments')
 
         // jwt web token api ==================================
         app.post('/jwt', async (req, res) => {
@@ -189,9 +191,11 @@ async function run() {
             const product = req.body
             const shopId = product.shopId
             const query = { shopId: shopId }
+            const filter = { ownerEmail: product.shopManager }
+            const shop = await shopCollection.findOne(filter)
 
             const existingProducts = await productCollection.find(query).toArray();
-            if (existingProducts.length >= 3) {
+            if (existingProducts.length >= shop.limit) {
                 return res.send({ message: 'product limit crossed' })
             }
 
@@ -328,6 +332,63 @@ async function run() {
 
         })
 
+        // payment intent api ====================================
+        app.post('/create-payment-intent', async (req, res) => {
+            const { price } = req.body
+            const amount = parseInt(price * 100)
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ['card']
+            })
+
+            res.send({
+                clientSecret: paymentIntent.client_secret
+            })
+        })
+
+        app.post('/payments', async (req, res) => {
+            const payment = req.body
+            console.log(payment)
+
+            let incrementValue
+            let incomeValue
+            if (payment.price === 10) {
+                incrementValue = 200
+                incomeValue = 10
+            } else if (payment.price === 20) {
+                incrementValue = 450
+                incomeValue = 20
+            } else if (payment.price === 50) {
+                incrementValue = 1500
+                incomeValue = 50
+            } else {
+                // Set a default increment value if none of the specified conditions match
+                incrementValue = 0;
+                incomeValue = 0
+            }
+
+            // update shop limit ---------------
+            const filter = { ownerEmail: payment.email };
+            const updateDoc = {
+                $inc: {
+                    limit: incrementValue
+                }
+            };
+            const shopResult = await shopCollection.updateMany(filter, updateDoc)
+
+            // update admin incom -------------
+            const query = { role: 'admin' }
+            const updateAdmin = {
+                $inc: {
+                    income: incomeValue
+                }
+            };
+            const adminResult = await userCollection.updateOne(query, updateAdmin)
+
+            const result = await paymentCollection.insertOne(payment)
+            res.send(result)
+        })
 
         // Helper function to handle circular structures
         function getCircularReplacer() {
