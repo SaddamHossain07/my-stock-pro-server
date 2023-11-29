@@ -8,7 +8,6 @@ const port = process.env.PORT || 5000
 
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    // other headers...
     next();
 });
 // middleware =======================
