@@ -13,7 +13,9 @@ app.use((req, res, next) => {
 // middleware =======================
 app.use(cors({
     origin: [
-        'http://localhost:5173'
+        'https://mystockpro-d8f17.web.app',
+        'https://mystockpro-d8f17.firebaseapp.com',
+        'http://localhost:5173',
     ]
 }));
 app.use(express.json())
