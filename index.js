@@ -258,53 +258,20 @@ async function run() {
             res.send(result)
         })
 
-        // sales collection ==================================
-        // app.get('/sales/:email', verifyToken, async (req, res) => {
-        //     const email = req.params.email
-        //     const query = { shopManager: email }
-        //     const result = await saleCollection.find(query).toArray()
-        //     res.send(result)
-        // })
 
-        app.get('/sales', async (req, res) => {
-            const result = await saleCollection.aggregate([
-                {
-                    $sort: { salesDate: -1 }
-                },
-                {
-                    $unwind: '$cartProductIds'
-                },
-                {
-                    $lookup: {
-                        from: 'products',
-                        localField: 'shopManager',
-                        foreignField: 'shopManager',
-                        as: 'cartProducts'
-                    }
-                },
-                {
-                    $unwind: '$cartProducts'
-                },
-                {
-                    $group: {
-                        _id: '$cartProducts.shopManager',
-                        buyingPrice: { $sum: '$cartProducts.buyingPrice' },
-                        sellingPrice: { $sum: '$cartProducts.sellingPrice' },
+        app.get('/sales-stats/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { email: email }
+            const result = await saleCollection.find(query).toArray()
+            const totalSellingPrice = result.reduce((total, item) => total + item.price, 0)
+            const totalBuyingPrice = result.reduce((total, item) => total + item.totalBuyingPrice, 0)
+            const profit = totalSellingPrice - totalBuyingPrice
 
-                    }
-                },
-                {
-                    $project: {
-                        _id: 0,
-                        buyingPrice: '$buyingPrice',
-                        sellingPrice: '$sellingPrice',
-                    }
-                }
+            res.send({
+                totalBuyingPrice, totalSellingPrice, profit
+            })
 
-            ]).toArray()
-            res.send(result)
         })
-
 
         app.get('/sales/:email', async (req, res) => {
             const email = req.params.email;
@@ -334,16 +301,17 @@ async function run() {
                             products: {
                                 $push: {
                                     productName: '$products.name',
-                                    sellingDate: '$products.salesDate',
-                                    profit: { $subtract: ['$products.sellingPrice', '$products.buyingPrice'] }
+                                    sellingDate: '$salesDate',
+                                    profit: { $subtract: ['$products.sellingPrice', '$products.buyingPrice'] },
                                 }
+
                             }
                         }
                     },
                     {
                         $project: {
                             _id: 0,
-                            products: 1
+                            products: 1,
                         }
                     }
                 ]).toArray();
@@ -357,6 +325,7 @@ async function run() {
                 res.status(500).send('Internal Server Error');
             }
         });
+
 
 
         app.post('/sales', verifyToken, async (req, res) => {
@@ -448,6 +417,7 @@ async function run() {
             const result = await paymentCollection.insertOne(payment)
             res.send(result)
         })
+
 
         // admin state api =====================
         app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
