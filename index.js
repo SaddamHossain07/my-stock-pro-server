@@ -186,12 +186,6 @@ async function run() {
             res.send(result)
         })
 
-        // app.post('/products/:id', verifyToken, async (req, res) => {
-        //     const id = req.params.id
-        //     const query = { _id: new ObjectId(id) }
-        //     const result = await productCollection.findOne(query)
-        //     res.send(result)
-        // })
         app.post('/products', verifyToken, async (req, res) => {
             const product = req.body
             const shopId = product.shopId
@@ -259,7 +253,7 @@ async function run() {
         })
 
 
-        app.get('/sales-stats/:email', async (req, res) => {
+        app.get('/sales-stats/:email', verifyToken, async (req, res) => {
             const email = req.params.email
             const query = { email: email }
             const result = await saleCollection.find(query).toArray()
@@ -273,7 +267,7 @@ async function run() {
 
         })
 
-        app.get('/sales/:email', async (req, res) => {
+        app.get('/sales/:email', verifyToken, async (req, res) => {
             const email = req.params.email;
 
             try {
