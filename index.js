@@ -140,6 +140,11 @@ async function run() {
         })
 
         // shop collection ================================
+        app.get('/shops', async (req, res) => {
+            const result = await shopCollection.find().toArray()
+            res.send(result)
+        })
+
         app.get('/shops/:email', async (req, res) => {
             const query = { ownerEmail: req.params.email }
             const result = await shopCollection.findOne(query)
@@ -261,7 +266,7 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/sales', async (req, res) => {
+        app.get('/sales', verifyToken, async (req, res) => {
             const result = await saleCollection.aggregate([
                 {
                     $sort: { salesDate: -1 }
@@ -377,7 +382,7 @@ async function run() {
             };
             const shopResult = await shopCollection.updateMany(filter, updateDoc)
 
-            // update admin incom -------------
+            // update admin income -------------
             const query = { role: 'admin' }
             const updateAdmin = {
                 $inc: {
@@ -388,6 +393,35 @@ async function run() {
 
             const result = await paymentCollection.insertOne(payment)
             res.send(result)
+        })
+
+        // admin state api =====================
+        app.get('/admin-stats', verifyToken, verifyAdmin, async (req, res) => {
+            const query = { role: 'admin' }
+            const admin = await userCollection.findOne(query)
+
+            const totalProduct = await productCollection.estimatedDocumentCount()
+            const totalSalesCount = await saleCollection.estimatedDocumentCount()
+
+            const result = await saleCollection.aggregate([
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: {
+                            $sum: '$price'
+                        }
+                    }
+                }
+            ]).toArray()
+
+            const revenue = result.length > 0 ? result[0].totalRevenue : 0
+
+            res.send({
+                admin,
+                totalProduct,
+                totalSalesCount,
+                revenue
+            })
         })
 
         // Helper function to handle circular structures
