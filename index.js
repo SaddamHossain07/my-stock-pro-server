@@ -259,14 +259,14 @@ async function run() {
         })
 
         // sales collection ==================================
-        app.get('/sales/:email', verifyToken, async (req, res) => {
-            const email = req.params.email
-            const query = { shopManager: email }
-            const result = await saleCollection.find(query).toArray()
-            res.send(result)
-        })
+        // app.get('/sales/:email', verifyToken, async (req, res) => {
+        //     const email = req.params.email
+        //     const query = { shopManager: email }
+        //     const result = await saleCollection.find(query).toArray()
+        //     res.send(result)
+        // })
 
-        app.get('/sales', verifyToken, async (req, res) => {
+        app.get('/sales', async (req, res) => {
             const result = await saleCollection.aggregate([
                 {
                     $sort: { salesDate: -1 }
@@ -304,6 +304,60 @@ async function run() {
             ]).toArray()
             res.send(result)
         })
+
+
+        app.get('/sales/:email', async (req, res) => {
+            const email = req.params.email;
+
+            try {
+                const result = await saleCollection.aggregate([
+                    {
+                        $match: { shopManager: email }
+                    },
+                    {
+                        $sort: { salesDate: -1 }
+                    },
+                    {
+                        $lookup: {
+                            from: 'products',
+                            localField: 'shopManager',
+                            foreignField: 'shopManager',
+                            as: 'products'
+                        }
+                    },
+                    {
+                        $unwind: '$products'
+                    },
+                    {
+                        $group: {
+                            _id: '$_id',
+                            products: {
+                                $push: {
+                                    productName: '$products.name',
+                                    sellingDate: '$products.salesDate',
+                                    profit: { $subtract: ['$products.sellingPrice', '$products.buyingPrice'] }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        $project: {
+                            _id: 0,
+                            products: 1
+                        }
+                    }
+                ]).toArray();
+
+                const finalResult = result.map(({ products }) => products).flat();
+
+                // console.log(finalResult);
+                res.send(finalResult);
+            } catch (error) {
+                console.error('Error fetching sales:', error);
+                res.status(500).send('Internal Server Error');
+            }
+        });
+
 
         app.post('/sales', verifyToken, async (req, res) => {
             const sales = req.body
