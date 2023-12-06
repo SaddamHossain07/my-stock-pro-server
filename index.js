@@ -14,6 +14,7 @@ app.use((req, res, next) => {
 // middleware =======================
 app.use(cors({
     origin: [
+        'https://pytorial.com',
         'https://mystockpro-d8f17.web.app',
         'https://mystockpro-d8f17.firebaseapp.com',
         'http://localhost:5173',
